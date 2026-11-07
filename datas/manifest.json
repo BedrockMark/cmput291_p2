@@ -1,0 +1,19 @@
+{
+  "format": "UTF-8 JSON Lines (not a JSON array)",
+  "seed": 2912026,
+  "provenance": "Original synthetic data; no external records.",
+  "files": [
+    {
+      "file": "workshops-small.jsonl",
+      "documents": 24,
+      "bytes": 18507,
+      "sha256": "79992a582b1f435c7c481596f1f8b2188fdb9c4fa3d5eb29918fac132470adc8"
+    },
+    {
+      "file": "workshops.jsonl",
+      "documents": 1200,
+      "bytes": 1318540,
+      "sha256": "e634b0106f9286b08a48be91fdb34cf6c341404b0a480e8f5aad07b929fdacda"
+    }
+  ]
+}
