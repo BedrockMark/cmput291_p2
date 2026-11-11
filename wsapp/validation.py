@@ -11,8 +11,6 @@ from datetime import datetime
 
 from .db import DATE_FORMAT
 
-CATEGORIES = ("arts", "computing", "cooking", "outdoors", "repair", "wellness")
-
 MAX_TOP_N = 20
 MAX_REVIEWER_LEN = 80
 MAX_COMMENT_LEN = 500

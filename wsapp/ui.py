@@ -72,6 +72,8 @@ def paginate(results, render_row, title, headings, empty_message="No results fou
                              result set is never loaded into memory.
     render_row(doc) -> list  the cells (strings) for one result row,
                              in the same order as `headings`.
+                             
+    DISCLAIMER: We see '... allow the user to request the next page or return to the menu', so did NOT make the 'previous page' option.
     """
     iterator = iter(results)
     page = list(islice(iterator, PAGE_SIZE))

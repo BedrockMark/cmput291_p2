@@ -90,8 +90,8 @@ def search_screen(coll):
     keyword = ui.prompt("Keyword (empty to cancel): ")
     if not keyword:
         return
-    category = validation.parse_category(ui.prompt(
-        f"Category ({', '.join(validation.CATEGORIES)}; empty for any): "))
+    category = validation.parse_category(ui.prompt(f"Category (empty for any): "))
+    
     ui.paginate(
         search.search_workshops(coll, keyword, category),
         render_workshop,

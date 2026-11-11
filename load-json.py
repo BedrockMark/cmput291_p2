@@ -21,7 +21,7 @@ from pymongo.errors import PyMongoError
 
 from wsapp import db, validation
 
-BATCH_SIZE = 1000
+BATCH_SIZE = 600
 
 
 class LoadError(Exception):
@@ -84,7 +84,18 @@ def load_workshops(coll, lines, batch_size=BATCH_SIZE):
     batch's line range (first_line-last_line). LoadError from iter_batches
     propagates unchanged.
     """
-    raise NotImplementedError("load_workshops")
+    coll.drop()
+    coll = db.get_collection(coll.database.client, coll.database.name, coll.name)
+    count = 0
+    for first_line, last_line, docs in iter_batches(lines, batch_size):
+        try:
+            coll.insert_many(docs)
+        except PyMongoError as err:
+            raise LoadError(
+                f"Database error inserting lines {first_line}-{last_line}: {err}"
+            ) from None
+        count += len(docs)
+    return count
 
 
 def main(argv):

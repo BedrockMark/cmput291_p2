@@ -1,0 +1,203 @@
+
+Mini Project II
+group project
+
+Due: Nov 24th at 5pm
+
+Clarifications:
+
+You are responsible for monitoring the course discussion forum in Canvas and this section of the project specification for more details or clarifications. No clarification will be posted after 5pm on Nov 22.
+
+Purpose
+
+Build an application that loads JSON documents into MongoDB and lets a user search community workshops, find sessions with seats available, view summaries, reserve seats, and add reviews. Use Python with a MongoDB driver, such as PyMongo. A command-line menu is sufficient; a graphical interface earns no additional credit.
+
+The supplied data is entirely synthetic. Each document describes one workshop, with an embedded organizer, venue, tags, sessions, and reviews. See the data dictionary for the complete schema and a sample document.
+
+Group work policy
+
+You will be doing this project with one or two other partners from the 291 class, i.e., groups of size 2-3. All group members are expected to contribute somewhat equally to the project. In case of difficulties within a group and when a partner is not lifting their weight, make sure to document all your contributions. If there is a break-up, each group member will get credit only for the portion of the work they completed, losing the mark for any work either not completed or completed by the partners.
+
+Phase 1 - Load the collection (3 correctness marks)
+
+Write load-json.py, run as follows:
+
+python3 load-json.py workshops.jsonl 27017
+
+The two arguments are the path to the JSON Lines input and the local MongoDB port. Connect to database 291db_workshops, collection workshops. Replace that collection if it exists. Do not remove any other collections or databases. Open the file before replacing the collection so that an invalid path does not erase previous data.
+
+Each nonblank line contains one JSON object. This is not a JSON array. Preserve the provided string _id values and all field values, including timestamp strings. Read incrementally and use batches of at most 1,000 documents with insertMany or the equivalent driver method. Do not read the whole file into memory. The loader ends after printing the number of inserted documents. No interactive menu is required for Phase 1. Driver code is required; mongoimport alone does not satisfy this phase.
+
+The input for grading will obey the schema, with unique workshop IDs and session IDs unique within each workshop. If malformed JSON or an insertion error occurs, stop, report the error and line/batch involved, and exit unsuccessfully. A partial collection may remain after such an error; rollback is not required. Re-running on valid input must replace the partial collection. A file with no documents must produce an empty collection. Indexes are optional; describe any indexes you create in your README.
+
+Phase 2 - Application (15 correctness marks)
+
+Write workshops.py, run as follows:
+
+python3 workshops.py 27017
+
+Connect to the same database 291db_workshops and collection workshops, and offer the six operations below, plus an exit option. After each operation, return to the main menu. Handle invalid input and empty results without crashing. Report a connection failure clearly.
+
+All filters, ordering, grouping, averages, and changes to stored data must be performed by MongoDB. Application code may validate input, build queries, format results, and paginate cursors. It must not load the collection to compute answers. Alternative MongoDB queries that produce the specified results are acceptable.
+
+1. Search workshops
+
+Ask for a nonempty keyword and optionally a category. Trim surrounding whitespace. A keyword is a literal, case-insensitive substring of either title or description; it is not a regular expression or a list of words. For example, C++ matches the text C++,  tech matches Technology and biotechnology, and a.b does not match axb. If a category is provided, require an exact match after lowercasing the input. An unrecognized category simply has no results. Include only active workshops.
+
+Show workshop ID, title, category, city, and price in dollars, ordered by title ascending and then workshop ID ascending. Sort within MongoDB, using a cursor's sort method or an aggregation $sort stage. Display at most 10 per page and allow the user to request the next page or return to the menu. Display a clear message when there are no results. Price is stored in integer cents; format 1500 as $15.00 and 0 as $0.00.
+
+2. Find available sessions
+
+Ask for a city, date in YYYY-MM-DD, and a positive integer number of seats. Match the entire city name, ignoring case and surrounding whitespace. Interpret the date as a UTC calendar day: include midnight at its start and exclude midnight at the start of the next day. Validate calendar dates, including leap days.
+
+Return one row for each matching session of an active workshop in that city. The session itself must start on the requested date and have at least the requested number of seats remaining. A workshop with two qualifying sessions has two rows. Do not combine the date of one session with the seats of another session.
+
+Show workshop ID, title, session ID, start timestamp, seats remaining, and price. Order by start timestamp, workshop ID, and session ID, all ascending. Use the same 10-row pagination as operation 1. Do not return nonmatching sessions from an otherwise matching workshop. Empty sessions arrays produce no rows.
+
+3. Most popular tags for a date
+
+Ask for a date and n, an integer from 1 to 20. Consider active workshops with at least one session on that UTC day that has at least one seat remaining. For each tag, count how many qualifying workshops have that tag. Count a workshop only once per tag, even if it has multiple qualifying sessions. Tags are unique within a workshop. Workshops with no tags do not contribute a tag.
+
+Show the first n tags and their workshop counts, ordered by count descending, then tag ascending. Return at most n rows, using the alphabetical tie-break even if other tags have the same count as the last returned tag. Show all if fewer than n tags qualify. An empty result gets an explanatory message.
+
+4. Top-rated workshops
+
+Ask for a positive integer minimum review count and n, an integer from 1 to 20. For each active workshop with at least that many reviews, calculate the arithmetic mean of its review ratings. Show workshop ID, title, review count, and average rating. Workshops with no reviews do not qualify. Review timestamps and session dates do not restrict this operation.
+
+Order by the unrounded average descending, review count descending, and workshop ID ascending. Return at most n rows; do not include extra ties. Display averages to two decimal places after ranking. Handle fewer than n qualifying workshops and no qualifying workshops.
+
+5. Reserve seats
+
+Ask for an exact workshop ID, exact session ID, and a positive integer number of seats. For an active workshop, decrease that session's seats_remaining only if it has enough seats. Capacity and all other sessions must remain unchanged.
+
+The availability condition and decrement must be part of one atomic MongoDB update. A separate availability read followed by an unconditional update is insufficient: two users must not be able to reserve the same last seats. Report success or a failure such as "Reservation failed: unavailable workshop, session, or seats." Distinguishing these failure causes is optional. Never create a workshop or session when an ID is not found. Reject zero, negative, or noninteger seats.
+
+This is an inventory simulation. There are no accounts, payment processing, reservation records, cancellations, or current-time restrictions. A reservation may target any stored session, regardless of its date. capacity - seats_remaining represents seats already reserved, including reservations supplied in the dataset.
+
+6. Add a review
+
+Ask for an exact workshop ID, reviewer display name, integer rating from 1 to 5, and comment. Trim the name and comment. Require a name of 1-80 characters and a comment of 1-500 characters. Append a review only to an existing active workshop. Generate a fresh review ID (a UUID string is sufficient) and set created_at to the current UTC timestamp string. Report success with the new review ID, or failure if no active workshop was found. Preserve all existing reviews and other fields.
+
+Repeated reviewer names are allowed. No authentication or proof of attendance is required. A new review must affect subsequent top-rated results without reloading the file. Empty review arrays must accept a first review.
+
+Shared conventions
+IDs are case-sensitive strings, compared exactly after trimming input.
+Date input must be valid YYYY-MM-DD. Stored timestamps are fixed-width UTC strings in YYYY-MM-DDTHH:MM:SSZ format; Z means UTC, and their lexical order is chronological. Use UTC for date filtering, timestamp display, and new review timestamps. Display the Z suffix so the time convention is clear. For example, 2026-11-01T00:00:00Z belongs to November 1 for this assignment, even if the corresponding local date is October 31. Do not convert session timestamps to local time or mix BSON dates and strings. The operating system's timezone does not affect the required results.
+Only status: "active" workshops appear in any operation or accept changes.
+Input counts and ratings must be integers in the indicated range; reject a decimal value such as 2.5. An invalid value must not change the database.
+An unknown ID, city, or category and an empty collection must not crash the app.
+Output wording and table layout may differ if all required information is clear.
+Testing and demonstration
+
+Use data/workshops-small.jsonl (24 workshops) while developing and data/workshops.jsonl (1,200 workshops) for a larger trial. The small file is the first 24 documents of the larger one. Their answers usually differ because the larger file adds more workshops. Reload to undo reservations and reviews.
+
+Some data is published for development. Evaluation will use a different dataset that may also be larger. It follows the same schema and operation rules, but workshop and session IDs, titles, cities, tags, dates, counts, and answers may differ. Do not assume grading data is a prefix, subset, or superset of a sample. Do not hardcode IDs, names, counts, dates, or expected answers. Be ready to load the data, demonstrate every operation, and explain the queries and contribution of each team member. Include tests covering empty arrays, no results, ties, invalid input, literal punctuation in searches, and insufficient seats.
+
+Submission
+
+Submit all source files, dependency declarations, and a README with exact setup and run commands on GitHub. Do not submit database binaries, credentials, or a copy of the large input file unless requested by the instructor. Your README must identify team members and acknowledge outside sources and AI assistance according to the course's published policy.
+
+Put documentation in your README and relevant code comments. The README should explain query and index choices, testing and known limitations, and each team member's work. A separate report is not required.
+
+Create your GitHub repo:
+
+Read Instructions for creating GitHub repositories
+Upon clicking the link https://classroom50.org/UAlberta-CMPUT291-Classroom50/cmput291-fall26/assignments/mini-proj-2/accept?k=x534nz2w
+You will be prompted to either join an existing team or create a new one. If you choose to create a team, please select a unique team name. Be sure to select the correct team (as you won't be able to change it later) and avoid characters other than  [A-Za-z0-9_.-] in your team name (as special characters cause problems when your repos are being cloned). After completing this step, you should automatically gain access to your team’s repository.
+Please only use the Classroom50 web interface to join a team. Refer to this guide on how to manage your team.
+The team creator should check the email they registered the GitHub account with. There should be a link where you can accept pending requests for members joining.
+Update the README.md file on your GitHub repository with your name and CCID and those of your group members. 
+SUBMIT the repository URL here.
+Marking (20% correctness; 80% code understanding)
+
+The project mark has two components, following the assessment model used in Mini-project 1. Correctness is assessed for the group's submitted application. Code understanding is assessed individually during the demo; members of the same group may receive different marks.
+
+Correctness (20 marks) checks required behavior, expected database changes, normal edge cases, and operation against the grading dataset.
+
+Correctness assessment
+Component	Correctness marks
+Phase 1: Loader	3
+Phase 2: Application	15
+Interface behavior, validation, and error handling	2
+Correctness total	20
+
+Code understanding (80 marks) is evaluated through questions about your own submission. A TA may ask any member to explain, trace, modify, or reason about any part of the code, including code written by a partner. Every member should understand the document model, loader, database access, queries and pipelines, atomic updates, validation, testing, and any indexes used.
+
+Code understanding also accounts for code quality: clarity, modularity, meaningful function boundaries, readable names, low duplication, consistent error handling, safe query construction, update discipline, and a reasonable testing strategy. Working output alone is not sufficient to demonstrate understanding.
+
+The code understanding mark is capped by the percentage earned on correctness. If the group earns 15/20 (75%) for correctness, each member can receive at most 60/80 (75%) for code understanding. A member with an otherwise earned 72/80 therefore receives 60/80, for a final project mark of 75/100.
+
+Equivalently, if C is the group's correctness mark out of 20 and U is a member's assessed code understanding mark out of 80:
+
+Final individual mark out of 100 = C + min(U, 4 * C)
+
+The README and code documentation support assessment of design, testing, and contributions; they do not form a separate percentage outside this 20/80 split.
+
+Workshop dataset
+
+Original, fictional data prepared for this assignment. Names and records do not describe real providers, participants, or transactions. It has no external dataset dependency, account requirement, or scraping step. All records and comments were generated from templates; they are intended for database exercises, not statistical inferences about community activities. The instructor may adapt and distribute this generated material for the course.
+
+Files and format
+data/workshops-small.jsonl: 24 deliberately constructed edge-case documents.
+data/workshops.jsonl: 1,200 documents, including those same first 24 documents.
+data/manifest.json: sizes, counts, seed, and SHA-256 checksums.
+
+UTF-8 JSON Lines: each nonblank line is a complete JSON object. There is no enclosing array and no comma between lines. Standard JSON parsers must be applied one line at a time. _id is already supplied; do not replace it with an ObjectId. Those data files can be downloaded from google drive.
+
+Schema
+
+All fields below are required except venue.room. Arrays may be empty but never null or absent. The values of organizer and venue are embedded objects.
+
+Workshop fields
+Field	Type / meaning
+_id	Unique nonempty string identifying a workshop
+title	Nonempty string; titles need not be unique
+description	String searched with the title
+category	arts, computing, cooking, outdoors, repair, or wellness
+status	active or cancelled; applies to the entire workshop
+organizer.organizer_id	Nonempty string; may repeat across workshops
+organizer.name	Organizer display name; consistent for a given organizer ID
+venue.city	City name string; supplied values include Edmonton, Calgary, Red Deer, St. Albert
+venue.building	Building display name string
+venue.room	Optional string or null; no operation filters by this field
+price_cents	Nonnegative integer price per seat; all prices are CAD
+tags	Array of distinct, nonempty, lowercase ASCII strings
+sessions	Array of embedded session objects, described below
+reviews	Array of embedded review objects, described below
+Session fields
+Session field	Type / invariant
+session_id	Nonempty string; unique within its workshop
+starts_at	Valid fixed-width UTC timestamp string: YYYY-MM-DDTHH:MM:SSZ
+capacity	Positive integer; fixed after loading
+seats_remaining	Integer satisfying 0 <= seats_remaining <= capacity
+Review fields
+Review field	Type / invariant
+review_id	Nonempty string; unique within its workshop
+reviewer	Display name string of 1-80 characters
+rating	Integer in 1-5
+comment	Nonempty string of at most 500 characters
+created_at	Valid fixed-width UTC timestamp string
+
+The example below is a valid document illustrating all fields; it is not a claim about the exact values of the small fixture file. The source file is authoritative.
+
+{
+  "_id": "W01000",
+  "title": "Python for Beginners",
+  "description": "Learn programming through practical exercises.",
+  "category": "computing",
+  "status": "active",
+  "organizer": {"organizer_id": "O001", "name": "Community Studio"},
+  "venue": {"city": "Edmonton", "building": "Community Hall", "room": "A"},
+  "price_cents": 1500,
+  "tags": ["coding", "beginner"],
+  "sessions": [
+    {"session_id": "S01000-1", "starts_at": "2026-11-01T10:00:00Z",
+     "capacity": 20, "seats_remaining": 7}
+  ],
+  "reviews": [
+    {"review_id": "R01000-1", "reviewer": "Sample learner", "rating": 4,
+     "comment": "Clear exercises.", "created_at": "2026-10-01T12:00:00Z"}
+  ]
+}
+
+Every array is bounded in the supplied files (at most 4 sessions and 8 reviews in generated records). Repeatedly adding reviews can grow a document over time; handling unbounded histories is outside this mini-project. Reviews may predate future sessions because a workshop can represent a recurring activity with prior participants.

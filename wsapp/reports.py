@@ -7,7 +7,7 @@ MongoDB, and return at most n (<= 20) rows, so returning a list is fine.
 from . import db
 
 
-def popular_tags(coll, day, n):
+def popular_tags(coll, date, n):
     """Operation 3: the n most common tags among workshops active on `day`.
 
     A workshop qualifies if it is active and has at least one session that
@@ -20,13 +20,36 @@ def popular_tags(coll, day, n):
 
     Parameters
         coll  the workshops collection
-        day   datetime.date
+        date   datetime.date
         n     int in 1..20
 
     Returns a list of at most n dicts {"tag": str, "count": int}, ordered by
     count descending, then tag ascending. Extra ties beyond n are cut off.
     """
-    raise NotImplementedError("popular_tags")
+    start, end = db.utc_day_bounds(date)
+    
+    pipeline = [
+        {
+            "$match":{
+                "status": db.ACTIVE,
+                "sessions":{
+                    "$elemMatch":{
+                        "starts_at": {"$gte": start, "$lt":end},
+                        "seats_remaining": {"$gte": 1}
+                    }
+                }
+            }
+        },
+        {
+            "$unwind": "$tags"
+        },
+        {"$group": {"_id": "$tags", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1, "_id": 1}},
+        {"$limit": n},
+        {"$project": {"_id": 0, "tag": "$_id", "count": 1}}
+    ]
+    
+    return coll.aggregate(pipeline)
 
 
 def top_rated(coll, min_reviews, n):
