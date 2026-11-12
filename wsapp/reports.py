@@ -31,7 +31,7 @@ def popular_tags(coll, date, n):
     pipeline = [
         {
             "$match":{
-                "status": db.ACTIVE,
+                **db.active_filter(),
                 "sessions":{
                     "$elemMatch":{
                         "starts_at": {"$gte": start, "$lt":end},
@@ -49,7 +49,7 @@ def popular_tags(coll, date, n):
         {"$project": {"_id": 0, "tag": "$_id", "count": 1}}
     ]
     
-    return coll.aggregate(pipeline)
+    return list(coll.aggregate(pipeline))
 
 
 def top_rated(coll, min_reviews, n):
@@ -70,7 +70,7 @@ def top_rated(coll, min_reviews, n):
     (ui.fmt_average).
     """
     pipeline = [
-        {"$match":{"status": db.ACTIVE}},
+        {"$match": db.active_filter()},
         {"$unwind": "$reviews"},
         {"$group": {"_id": "$_id", "title": {"$first": "$title"}, "review_count": {"$sum": 1}, "avg_rating":{"$avg":"$reviews.rating"}}},
         {"$match": {"review_count": {"$gte": min_reviews}}},

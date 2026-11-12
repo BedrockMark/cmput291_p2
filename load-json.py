@@ -17,6 +17,7 @@ input replaces it.
 import json
 import sys
 
+from bson.errors import BSONError
 from pymongo.errors import PyMongoError
 
 from wsapp import db, validation
@@ -54,7 +55,7 @@ def iter_batches(lines, batch_size=BATCH_SIZE):
             continue
         try:
             doc = json.loads(line)
-        except json.JSONDecodeError as err:
+        except ValueError as err:  # JSONDecodeError (or bad UTF-8 in bytes input)
             raise LoadError(f"Malformed JSON on line {line_no}: {err}") from None
         if not isinstance(doc, dict):
             raise LoadError(f"Line {line_no} is not a JSON object.")
@@ -85,12 +86,12 @@ def load_workshops(coll, lines, batch_size=BATCH_SIZE):
     propagates unchanged.
     """
     coll.drop()
-    coll = db.get_collection(coll.database.client, coll.database.name, coll.name)
+    coll.database.create_collection(coll.name)
     count = 0
     for first_line, last_line, docs in iter_batches(lines, batch_size):
         try:
             coll.insert_many(docs)
-        except PyMongoError as err:
+        except (PyMongoError, BSONError) as err:
             raise LoadError(
                 f"Database error inserting lines {first_line}-{last_line}: {err}"
             ) from None
@@ -107,7 +108,9 @@ def main(argv):
 
     # Open the file before touching the database (spec requirement).
     try:
-        infile = open(path, encoding="utf-8")
+        # Binary mode: json.loads decodes each line itself (UTF-8, optional
+        # BOM), so an invalid byte sequence is reported with its line number.
+        infile = open(path, "rb")
     except OSError as err:
         print(f"Cannot open {path}: {err}")
         return 1

@@ -32,29 +32,13 @@ def search_workshops(coll, keyword, category=None):
     workshop ID ascending.
     """
     
-    res = coll.find(
-        {
-            "status": db.ACTIVE,
-            "$and":[
-                {
-                    "$or": [
-                        {"title": db.literal_regex(keyword)},
-                        {"description": db.literal_regex(keyword)}
-                    ]
-                },
-                {"category": category} if category is not None and category else {}
-            ]
-        },
-        {
-            "_id": 1,
-            "title": 1,
-            "category": 1,
-            "venue.city": 1,
-            "price_cents": 1
-        }
-    ).sort([("title", 1), ("_id", 1)])
-
-    return res
+    pattern = db.literal_regex(keyword)
+    query = db.active_filter()
+    query["$or"] = [{"title": pattern}, {"description": pattern}]
+    if category:
+        query["category"] = category
+    projection = {"title": 1, "category": 1, "venue.city": 1, "price_cents": 1}
+    return coll.find(query, projection).sort([("title", 1), ("_id", 1)])
 
 
 def available_sessions(coll, city, date, seats):
@@ -83,40 +67,30 @@ def available_sessions(coll, city, date, seats):
     """
     
     
-    """
-    Show 
-    workshop ID, 
-    title, 
-    session ID, 
-    start timestamp, 
-    seats remaining, and 
-    price. 
-    Order by start timestamp, workshop ID, and session ID, all ascending
-    """
-    
     start, end = db.utc_day_bounds(date)
-    
+    session_match = {
+        "starts_at": {"$gte": start, "$lt": end},
+        "seats_remaining": {"$gte": seats},
+    }
     pipeline = [
-        {"$unwind":"$sessions"},
-        {"$match":
-            {
-                "status": db.ACTIVE,
-                "venue.city": city,
-                "sessions.starts_at": {"$gte": start, "$lt": end},
-                "sessions.seats_remaining": {"$gte": seats}
-            }
-        },
-        {"$project":
-            {
-                "_id": 0,
-                "workshop_id": "$_id",
-                "title": 1,
-                "session_id": "$sessions.session_id",
-                "starts_at": "$sessions.starts_at",
-                "seats_remaining": "$sessions.seats_remaining",
-                "price_cents": 1
-            }
-         },
-        {"$sort": {"sessions.starts_at": 1, "_id": 1, "sessions.session_id": 1}}
+        # Keep only workshops with at least one qualifying session...
+        {"$match": {
+            **db.active_filter(),
+            "venue.city": db.exact_ci_regex(city),
+            "sessions": {"$elemMatch": session_match},
+        }},
+        {"$unwind": "$sessions"},
+        # ...then drop that workshop's non-qualifying sessions.
+        {"$match": {f"sessions.{field}": cond for field, cond in session_match.items()}},
+        {"$project": {
+            "_id": 0,
+            "workshop_id": "$_id",
+            "title": 1,
+            "session_id": "$sessions.session_id",
+            "starts_at": "$sessions.starts_at",
+            "seats_remaining": "$sessions.seats_remaining",
+            "price_cents": 1,
+        }},
+        {"$sort": {"starts_at": 1, "workshop_id": 1, "session_id": 1}},
     ]
     return coll.aggregate(pipeline)

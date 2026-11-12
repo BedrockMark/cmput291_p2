@@ -35,8 +35,7 @@ def reserve_seats(coll, workshop_id, session_id, seats):
     and check result.modified_count.
     """
     q = {
-        "status": db.ACTIVE,
-        "_id": workshop_id,
+        **db.active_filter(_id=workshop_id),
         "sessions": {
             "$elemMatch":{
                 "session_id": session_id,
@@ -79,10 +78,7 @@ def add_review(coll, workshop_id, reviewer, rating, comment):
         "created_at": db.now_utc_str(),
     }
     
-    q = {
-        "status": db.ACTIVE,
-        "_id": workshop_id,
-    }
+    q = db.active_filter(_id=workshop_id)
     
     upd = {
         "$push": {
@@ -92,4 +88,4 @@ def add_review(coll, workshop_id, reviewer, rating, comment):
     
     result = coll.update_one(q, upd)
     
-    return review["review_id"] if result.modified_count else None
+    return review["review_id"] if result.matched_count else None

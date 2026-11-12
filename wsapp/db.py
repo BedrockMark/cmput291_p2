@@ -64,15 +64,25 @@ def exact_ci_regex(text):
     return {"$regex": f"^{re.escape(text)}$", "$options": "i"}
 
 
-def utc_day_bounds(date):
+def active_filter(**conditions):
+    """Query filter for active workshops, plus any extra field conditions."""
+    return {"status": ACTIVE, **conditions}
+
+
+def utc_day_bounds(day):
     """Return (start, end) timestamp strings for UTC calendar day `day`.
 
     `day` is a datetime.date. Use as {"$gte": start, "$lt": end}: midnight at
     the start of `day` is included, midnight of the next day is excluded.
+    date.isoformat() always gives a zero-padded 4-digit year, so the bounds
+    compare correctly with the stored fixed-width strings.
     """
-    start = datetime(date.year, date.month, date.day)
-    end = start + timedelta(days=1)
-    return start.strftime(TIMESTAMP_FORMAT), end.strftime(TIMESTAMP_FORMAT)
+    start = f"{day.isoformat()}T00:00:00Z"
+    try:
+        end = f"{(day + timedelta(days=1)).isoformat()}T00:00:00Z"
+    except OverflowError:  # 9999-12-31 has no next day; "T24" sorts after T23:59:59
+        end = f"{day.isoformat()}T24:00:00Z"
+    return start, end
 
 
 def format_timestamp(moment):
