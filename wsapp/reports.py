@@ -68,9 +68,15 @@ def top_rated(coll, min_reviews, n):
     ordered by the UNROUNDED avg_rating descending, review_count descending,
     _id ascending. Rounding to two decimals happens only when displaying
     (ui.fmt_average).
-
-    Hints: $match active, $addFields review_count = {$size: "$reviews"},
-    $match review_count >= min_reviews, avg_rating = {$avg: "$reviews.rating"},
-    $sort, $limit n, $project.
     """
-    raise NotImplementedError("top_rated")
+    pipeline = [
+        {"$match":{"status": db.ACTIVE}},
+        {"$unwind": "$reviews"},
+        {"$group": {"_id": "$_id", "title": {"$first": "$title"}, "review_count": {"$sum": 1}, "avg_rating":{"$avg":"$reviews.rating"}}},
+        {"$match": {"review_count": {"$gte": min_reviews}}},
+        {"$sort": {"avg_rating": -1, "review_count": -1, "_id": 1}},
+        {"$limit": n},
+        {"$project": {"_id": 1, "title": 1, "review_count": 1, "avg_rating": 1}}
+    ]
+    
+    return list(coll.aggregate(pipeline))

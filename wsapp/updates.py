@@ -13,22 +13,6 @@ import uuid
 from . import db
 
 
-def new_review(reviewer, rating, comment):
-    """Build the embedded review document for a new review.
-
-    review_id is a fresh UUID string; created_at is the current UTC time in
-    the stored "YYYY-MM-DDTHH:MM:SSZ" format. Inputs must already be
-    validated (trimmed name 1-80 chars, rating 1-5, trimmed comment 1-500).
-    """
-    return {
-        "review_id": str(uuid.uuid4()),
-        "reviewer": reviewer,
-        "rating": rating,
-        "comment": comment,
-        "created_at": db.now_utc_str(),
-    }
-
-
 def reserve_seats(coll, workshop_id, session_id, seats):
     """Operation 5: atomically take `seats` seats from one session.
 
@@ -50,7 +34,24 @@ def reserve_seats(coll, workshop_id, session_id, seats):
         {"$inc": {"sessions.$.seats_remaining": -seats}})
     and check result.modified_count.
     """
-    raise NotImplementedError("reserve_seats")
+    q = {
+        "status": db.ACTIVE,
+        "_id": workshop_id,
+        "sessions": {
+            "$elemMatch":{
+                "session_id": session_id,
+                "seats_remaining": {"$gte": seats}
+            }
+        }
+    }
+    upd = {
+        "$inc":{
+            "sessions.$.seats_remaining": -seats
+        }
+    }
+    
+    return coll.update_one(q, upd).modified_count == 1
+    
 
 
 def add_review(coll, workshop_id, reviewer, rating, comment):
@@ -70,4 +71,25 @@ def add_review(coll, workshop_id, reviewer, rating, comment):
     Returns the new review_id (str) on success, or None if no active
     workshop has that _id.
     """
-    raise NotImplementedError("add_review")
+    review = {
+        "review_id": str(uuid.uuid4()),
+        "reviewer": reviewer,
+        "rating": rating,
+        "comment": comment,
+        "created_at": db.now_utc_str(),
+    }
+    
+    q = {
+        "status": db.ACTIVE,
+        "_id": workshop_id,
+    }
+    
+    upd = {
+        "$push": {
+            "reviews": review
+        } 
+    }
+    
+    result = coll.update_one(q, upd)
+    
+    return review["review_id"] if result.modified_count else None
